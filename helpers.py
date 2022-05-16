@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 import os
 from termcolor import colored as c
+from logger import logger
 
 
 # print boolean as red or green
@@ -19,7 +20,9 @@ def bprint(i):
 
 
 def grey(string, bold=False):
-    return c(string, attrs=["dark", ("bold"if bold else None)])
+    if(bold):
+        return c(string, attrs=["dark", "bold"])
+    return c(string, attrs=["dark"])
 
 
 def purple(string, bold=False):
@@ -61,7 +64,7 @@ def renameFile(oldFile, newFile):
     try:
         os.rename(oldFile, newFile)
     except:
-        print("Failed to rename the file")
+        logger.error("Failed to rename the file")
         return 1
 
 
@@ -90,7 +93,7 @@ def loadJson(filename):
             input = json.load(jsonFile)
             return input
     except:
-        print(f"Failed loading json: {filename}")
+        logger.error(f"Failed loading json: {filename}")
         return None
 
 

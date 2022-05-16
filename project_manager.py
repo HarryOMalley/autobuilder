@@ -5,30 +5,17 @@ import questionary
 from questionary import Choice
 import sys
 from logger import logger
-AUTOBUILDER_VERSION = "2.1"
+VERSION = "1.0"
 
 
-class ConfigurationManager():
+class ProjectManager():
+    # Controls project specific configuration of where the project is, what scripts to run
+    # Set the scripts folder to overwrite any/all of the scripts default with autobuilder
     default_config = {
-        "version": AUTOBUILDER_VERSION,
-        "options": {
-            "always_clean": False,
-            "periodic_clean": True,
-            "build_interval": 3,
-            "num_builds_clean": 10,
-            "patterns": ["*.cpp", "*.hpp", "*.h", "CMakeLists.txt"],
-            "show_options": True,
-            "show_tests": True,
-            "verbose": False,
-            "interrupt": True
-        },
-        "stages": {
-            "build": True,
-            "test": False,
-            "coverage": False,
-            "clang-format": False,
-            "clang-tidy": False,
-        },
+        "version": VERSION,
+        "project_path": "",
+        "script_folder": None,
+        "build_folder": "build",
         "script_paths": {
             "build": "build.sh",
             "test": "test.sh",
@@ -38,17 +25,11 @@ class ConfigurationManager():
             "clean": "clean.sh",
             "list-tests": "list-tests.sh"
         },
-        "excluded_tests": [],
     }
 
-    def __init__(self, CONFIG_PATH) -> None:
-        self.CONFIG_PATH = CONFIG_PATH
-        self.num_builds = 0
+    def __init__(self, PROJECT_PATH) -> None:
+        self.PROJECT_PATH = PROJECT_PATH
         self.config = []
-        self.utests = []
-        self.ftests = []
-        self.tests = []
-        self.excluded_tests = []
         self.stages = []
         self.script_paths = []
         self.patterns = []
@@ -62,6 +43,60 @@ class ConfigurationManager():
         self.interrupt = False
         self.verifyConfig()
         pass
+
+    def verifyConfig(self):
+        # Load config files and verify that they are the right version, load and add tests
+        print("Verifying configs")
+        config = loadJson(f"{self.PROJECT_PATH}/autobuilder.json")
+        if not config:
+            self.loadMainConfig(self.default_config)
+            self.saveConfig()
+            print(f'''\t {green("Created configuration file", True)}
+Please review {self.PROJECT_PATH}/autobuilder.json and modify script paths and matching patterns as required
+            ''')
+            sleep(10)
+        else:
+            # try to parse the config version, otherwise set as 0
+            config_version = parse(config.get("version") or "0.0")
+            current_version = parse(VERSION)
+
+            if(config_version == current_version):
+                self.loadMainConfig(config)
+            else:
+                # check if it is a major release discrepancy
+                if(current_version.major > config_version.major):
+                    renameFile(f"{self.PROJECT_PATH}/autobuilder.json",
+                               f"{self.PROJECT_PATH}/autobuilder.old.json")
+                    saveJson(self.PROJECT_PATH, "config",
+                             self.default_config)
+                    clearTerminal()
+                    print(f'''\t {red("~~~ ERROR ~~~")}
+The autobuilder.json file is from a previous release of autobuilder, a new config has been generated.
+The existing autobuilder.json has been renamed to autobuilder.old.json
+Please review the new file, modify as required and rerun
+                    ''')
+                    sleep(5)
+                    sys.exit(1)
+
+                # only warn if it is a minor release
+                else:
+                    saveJson(self.PROJECT_PATH, "config.new",
+                             self.default_config)
+                    self.loadMainConfig(config)
+                    clearTerminal()
+                    print(f''' \t{yellow("--- WARNING ---")}
+The autobuilder.json file may be out of date
+A new file has been generated to config.new.json
+Please review and modify your existing configuration if required
+(You will need to bump the version number to {VERSION} after reviewing)
+Continuing in 30s...
+                    ''')
+                    sleep(30)
+
+    def saveConfig(self):
+        self.config["stages"] = self.stages
+        saveJson(self.PROJECT_PATH, "autobuilder", self.config)
+        return
 
     # Takes a config file and loads the properties into the class
     def loadMainConfig(self, config):
@@ -116,60 +151,6 @@ class ConfigurationManager():
         })
         self.saveConfig()
         self.loadMainConfig(self.config)
-
-    def verifyConfig(self):
-        # Load config files and verify that they are the right version, load and add tests
-        logger.info("Verifying configs")
-        config = loadJson(f"{self.CONFIG_PATH}/config.json")
-        if not config:
-            self.loadMainConfig(self.default_config)
-            self.saveConfig()
-            logger.info(f'''\t {green("Created configuration file", True)}
-Please review config.json and modify script paths and matching patterns as required
-            ''')
-            sleep(10)
-        else:
-            # try to parse the config version, otherwise set as 0
-            config_version = parse(config.get("version") or "0.0")
-            current_version = parse(AUTOBUILDER_VERSION)
-
-            if(config_version == current_version):
-                self.loadMainConfig(config)
-            else:
-                # check if it is a major release discrepancy
-                if(current_version.major > config_version.major):
-                    renameFile(f"{self.CONFIG_PATH}/config.json",
-                               f"{self.CONFIG_PATH}/config.old.json")
-                    saveJson(self.CONFIG_PATH, "config",
-                             self.default_config)
-                    clearTerminal()
-                    print(f'''\t {red("~~~ ERROR ~~~")}
-The config.json file is from a previous release of autobuilder, a new config has been generated.
-The existing config.json has been renamed to config.old.json
-Please review the new file, modify as required and rerun
-                    ''')
-                    sleep(5)
-                    sys.exit(1)
-
-                # only warn if it is a minor release
-                else:
-                    saveJson(self.CONFIG_PATH, "config.new",
-                             self.default_config)
-                    self.loadMainConfig(config)
-                    clearTerminal()
-                    print(f''' \t{yellow("--- WARNING ---")}
-The config.json file may be out of date
-A new file has been generated to config.new.json
-Please review and modify your existing configuration if required
-(You will need to bump the version number to {AUTOBUILDER_VERSION} after reviewing)
-Continuing in 30s...
-                    ''')
-                    sleep(30)
-
-    def saveConfig(self):
-        self.config["stages"] = self.stages
-        saveJson(self.CONFIG_PATH, "config", self.config)
-        return
 
     def listOptions(self, minimal=False):
 
@@ -230,9 +211,9 @@ Continuing in 30s...
                         excluded = True if i in self.excluded_tests else False
                         print(f"\t{grey(i) if excluded else blue(i)}")
             else:
-                logger.info("No Unit tests detected")
-                logger.info(self.utests)
-                logger.info(self.tests)
+                print("No Unit tests detected")
+                print(self.utests)
+                print(self.tests)
         if functional:
             if(self.ftests.__len__() > 0):
                 tests = []
@@ -248,9 +229,9 @@ Continuing in 30s...
                         excluded = True if i in self.excluded_tests else False
                         print(f"\t{grey(i) if excluded else blue(i)}")
             else:
-                logger.info("No Functional tests detected")
-                logger.info(self.ftests)
-                logger.info(self.tests)
+                print("No Functional tests detected")
+                print(self.ftests)
+                print(self.tests)
 
     # Print the info about the configuration
     def printInfo(self, clear=True):

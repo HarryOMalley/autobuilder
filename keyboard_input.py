@@ -10,6 +10,7 @@
 
 import queue
 import threading
+from logger import logger
 
 
 class NonBlockingInput:
@@ -35,7 +36,7 @@ class NonBlockingInput:
                     # monitoring can be renabled by the main thread if required
                     self.running = False
                 except:
-                    print("Exception when reading user input")
+                    logger.error("Exception when reading user input")
 
     def input_queued(self):
         return_value = False

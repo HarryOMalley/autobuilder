@@ -11,6 +11,7 @@
 from watchdog.events import PatternMatchingEventHandler
 from helpers import *
 from datetime import datetime
+from logger import logger
 
 
 class Handler(PatternMatchingEventHandler):
@@ -28,9 +29,9 @@ class Handler(PatternMatchingEventHandler):
                                              ignore_directories=True, case_sensitive=False)
 
     def resetState(self):
-        print("resetting state")
+        logger.info("Resetting state")
         self.state = 0
-        print(f"handler state: {self.state}")
+        logger.info(f"Handler state: {self.state}")
 
     def resetMods(self):
         self.modifications = 0
@@ -42,7 +43,7 @@ class Handler(PatternMatchingEventHandler):
             return
         self.modifications += 1
         time = datetime.now().strftime("%H:%M:%S")
-        print(
+        logger.info(
             f'\t{self.modifications} - {time}: {event.src_path} was {blue("modified", True)}')
         # dont change if state is already file created
         self.last_changed = datetime.now()
@@ -52,7 +53,7 @@ class Handler(PatternMatchingEventHandler):
     def on_created(self, event):
         self.modifications += 1
         time = datetime.now().strftime("%H:%M:%S")
-        print(
+        logger.info(
             f'\t{time}: {event.src_path} was {purple("created", True)}')
         self.state = 2
     on_deleted = on_created

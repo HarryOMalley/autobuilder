@@ -21,6 +21,7 @@ import os
 import sys
 import subprocess
 import json
+from logger import logger
 
 BASE_PATH = os.path.dirname(__file__)
 CONFIG_PATH = f"{BASE_PATH}"
@@ -65,7 +66,7 @@ class Runner():
         try:
             while readable:
                 if(self.event_handler.state != 0 and self.state.interrupt == True):
-                    print(
+                    logger.info(
                         f"Killing process, handler state: {self.event_handler.state}, {self.state.interrupt}")
                     p.kill()
                     p.wait()
@@ -111,10 +112,10 @@ class Runner():
     def run(self, op, args=None, output=True):
         filename = self.state.script_paths.get(op)
         if not filename:
-            print(c(f"ERROR: Could not find {op} script", "red"))
+            logger.error(c(f"ERROR: Could not find {op} script", "red"))
         path = f"{SCRIPT_PATH}/{filename}"
         if(output):
-            print(f"Running script: {filename}")
+            logger.info(f"Running script: {filename}")
         command = []
         if(args):
             command = [path, *args]
@@ -126,12 +127,12 @@ class Runner():
                 return None
             output, err = completed
             if(err):
-                print(red(
+                logger.error(red(
                     f"\n{op.capitalize()} encountered an error during execution:\n"))
-                print(err.decode("UTF-8"))
+                logger.error(err.decode("UTF-8"))
             return output
         except Exception as e:
-            print(red(f"ERROR when running {op}\n{e}"))
+            logger.error(red(f"ERROR when running {op}\n{e}"))
 
     # Creates the test string argument to pass to CTest and calls run()
 
@@ -144,10 +145,12 @@ class Runner():
             if(testString.__len__() > 0):
                 testString += "|"
             testString += test
-        arg = f"-R ({testString})"
+        args.append(f"-R ({testString})")
+        args.append("--output-on-failure")
         if(self.state.verbose):
-            arg = arg + " -V"
-        self.run("test", [arg])
+            args.append("-VV")
+            args.append("-O test_output.txt")
+        self.run("test", args)
 
     # Is called when the state has changed, check the configuration to see what stages should be executed
     # Calls run() to invoke the specified script
@@ -168,9 +171,6 @@ class Runner():
                 self.run("coverage")
         if(self.state.stages.get("clang-format")):
             self.run("clang-format")
-        # # State hasnt changed yet, meaning we can reset modifications
-        # if(self.event_handler.state == 0):
-        #     self.event_handler.resetMods()
         self.loadTests()
 
     # Check if non blocking input class has a keypress queued
@@ -239,7 +239,6 @@ class Runner():
 
     def mainLoop(self):
         # build before doing anything
-        # self.run("build")
         self.loadTests()
         self.state.printInfo()
         try:
@@ -272,7 +271,7 @@ class Runner():
             self.stop()
 
     def stop(self):
-        print("Stopping...")
+        logger.info("Stopping...")
         self.observer.stop()
         self.observer.join()
         sys.exit(0)
